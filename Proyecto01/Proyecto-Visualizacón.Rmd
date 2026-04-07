@@ -1,0 +1,317 @@
+---
+title: "Análisis Exploratorio de Datos: Mercado Global de Teléfonos Móviles 2025"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r librerias, include=FALSE}
+library(ggplot2)
+library(plotly)
+```
+
+---
+
+# Introducción
+
+El mercado de teléfonos móviles es uno de los sectores tecnológicos más dinámicos y competitivos del mundo. Con cientos de modelos lanzados cada año por decenas de fabricantes, comprender las tendencias en especificaciones técnicas y precios resulta clave tanto para consumidores como para analistas del sector.
+
+Este análisis exploratorio examina **930 modelos de smartphones** lanzados entre 2014 y 2025, buscando responder: ¿Qué marcas dominan el mercado? ¿Cómo ha evolucionado la batería con el tiempo? ¿Existe relación entre precio y especificaciones?
+
+---
+
+# Descripción del Problema
+
+El consumidor moderno enfrenta una oferta abrumadora de dispositivos móviles. Elegir un teléfono implica evaluar simultáneamente múltiples variables: marca, RAM, cámara, batería, pantalla y precio. Este análisis busca revelar los **patrones subyacentes** en el mercado e identificar qué marcas ofrecen mejores especificaciones por precio.
+
+---
+
+# Fuentes de Datos
+
+El dataset utilizado es **Mobiles Dataset (2025)**, disponible públicamente. Contiene 930 registros con las siguientes variables:
+
+- **Company Name**: Fabricante del dispositivo
+- **Model Name**: Nombre del modelo
+- **RAM**: Memoria RAM en GB
+- **Front/Back Camera**: Megapíxeles de cámara frontal y trasera
+- **Battery Capacity**: Capacidad de batería en mAh
+- **Screen Size**: Tamaño de pantalla en pulgadas
+- **Launched Price (USA)**: Precio de lanzamiento en dólares
+- **Launched Year**: Año de lanzamiento
+
+---
+
+# Preparación de los Datos
+
+```{r carga_datos}
+df_raw <- read.csv("C:/Users/keren/OneDrive/Documentos/Mobiles Dataset (2025).csv",
+                   fileEncoding = "latin1", stringsAsFactors = FALSE)
+
+# Limpiar y convertir columnas numéricas usando solo base R
+df_raw$Price_USD   <- as.numeric(gsub("[^0-9.]", "", gsub(",", "", df_raw$Launched.Price..USA.)))
+df_raw$Battery_mAh <- as.numeric(gsub("[^0-9.]", "", df_raw$Battery.Capacity))
+df_raw$RAM_GB      <- as.numeric(gsub("[^0-9.]", "", df_raw$RAM))
+df_raw$Screen_in   <- as.numeric(gsub("[^0-9.]", "", df_raw$Screen.Size))
+df_raw$FrontCam_MP <- as.numeric(gsub("[^0-9.]", "", df_raw$Front.Camera))
+df_raw$BackCam_MP  <- as.numeric(gsub("[^0-9.]", "", df_raw$Back.Camera))
+df_raw$Brand       <- df_raw$Company.Name
+df_raw$Year        <- df_raw$Launched.Year
+
+# Filtrar filas con datos válidos usando base R
+df <- df_raw[
+  !is.na(df_raw$Price_USD)   & df_raw$Price_USD > 0 &
+  !is.na(df_raw$Battery_mAh) &
+  !is.na(df_raw$RAM_GB)      &
+  !is.na(df_raw$Screen_in),
+]
+
+cat("Registros válidos:", nrow(df), "\n")
+cat("Marcas únicas:", length(unique(df$Brand)), "\n")
+cat("Años cubiertos:", min(df$Year), "–", max(df$Year), "\n")
+```
+
+---
+
+# Análisis Univariado
+
+## Distribución de Precios en USD
+
+El primer vistazo al precio de lanzamiento en dólares revela una distribución claramente **sesgada hacia la derecha**: la mayoría de los teléfonos se lanza por debajo de los $500 USD, mientras que una minoría de dispositivos premium supera los $1,000. Este patrón refleja la estrategia de segmentación del mercado: pocos teléfonos de gama alta conviven con una amplia oferta de gama media y baja.
+
+```{r precio_dist}
+mediana_precio <- median(df$Price_USD, na.rm = TRUE)
+
+p1 <- ggplot(df, aes(x = Price_USD)) +
+  geom_histogram(bins = 40, fill = "#2196F3", color = "white", alpha = 0.85) +
+  geom_vline(xintercept = mediana_precio,
+             color = "#E91E63", linetype = "dashed", linewidth = 1) +
+  annotate("text",
+           x = mediana_precio + 100, y = 55,
+           label = paste0("Mediana: $", round(mediana_precio)),
+           color = "#E91E63", size = 3.5) +
+  labs(title = "Distribución de Precios de Lanzamiento (USD)",
+       x = "Precio (USD)", y = "Cantidad de modelos") +
+  theme_minimal(base_size = 13)
+
+ggplotly(p1)
+```
+
+---
+
+## Capacidad de Batería
+
+La capacidad de batería se concentra principalmente entre **4,000 y 5,000 mAh**, reflejando el estándar actual de la industria. Muy pocos modelos quedan por debajo de los 3,000 mAh, lo que indica que los fabricantes han adoptado baterías grandes como norma para cubrir la mayor demanda energética de pantallas y procesadores modernos.
+
+```{r bateria_dist}
+mediana_bat <- median(df$Battery_mAh, na.rm = TRUE)
+
+p2 <- ggplot(df, aes(x = Battery_mAh)) +
+  geom_histogram(bins = 35, fill = "#4CAF50", color = "white", alpha = 0.85) +
+  geom_vline(xintercept = mediana_bat,
+             color = "#FF5722", linetype = "dashed", linewidth = 1) +
+  annotate("text",
+           x = mediana_bat + 350, y = 75,
+           label = paste0("Mediana: ", round(mediana_bat), " mAh"),
+           color = "#FF5722", size = 3.5) +
+  labs(title = "Distribución de Capacidad de Batería",
+       x = "Capacidad (mAh)", y = "Cantidad de modelos") +
+  theme_minimal(base_size = 13)
+
+ggplotly(p2)
+```
+
+---
+
+## Top 10 Marcas por Número de Modelos
+
+Entre todas las marcas del dataset, **Oppo lidera** en cantidad de modelos, seguida por Apple, Honor y Samsung. Es destacable que las marcas chinas (Oppo, Honor, Vivo, Realme, Infinix) dominan en variedad de modelos, apuntando a una estrategia de mercado masivo con múltiples opciones para distintos segmentos de precio.
+
+```{r top_marcas}
+conteo_marcas <- sort(table(df$Brand), decreasing = TRUE)
+top10 <- as.data.frame(conteo_marcas[1:10])
+colnames(top10) <- c("Brand", "Count")
+
+p3 <- ggplot(top10, aes(x = reorder(Brand, Count), y = Count, fill = Count)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_gradient(low = "#90CAF9", high = "#1565C0") +
+  coord_flip() +
+  labs(title = "Top 10 Marcas por Número de Modelos",
+       x = NULL, y = "Número de modelos") +
+  theme_minimal(base_size = 13)
+
+ggplotly(p3)
+```
+
+---
+
+# Análisis Bivariado
+
+## Precio según RAM del Dispositivo
+
+Una relación clara emerge al graficar precio versus RAM: **a mayor memoria RAM, mayor precio**. Los teléfonos con 4–6 GB de RAM muestran amplia dispersión (gama media), mientras que los equipos con 12 GB o más se concentran en la franja alta del mercado. Esta correlación confirma que la RAM es uno de los factores más determinantes en el precio de un smartphone.
+
+```{r precio_ram}
+df_ram <- df[df$RAM_GB %in% c(3, 4, 6, 8, 12, 16) & !is.na(df$RAM_GB), ]
+df_ram$RAM_fac <- factor(df_ram$RAM_GB)
+
+p4 <- ggplot(df_ram, aes(x = RAM_fac, y = Price_USD, fill = RAM_fac)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.4) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(title = "Precio según RAM del Dispositivo",
+       x = "RAM (GB)", y = "Precio (USD)", fill = "RAM (GB)") +
+  theme_minimal(base_size = 13)
+
+ggplotly(p4)
+```
+
+---
+
+## Evolución del Precio por Año de Lanzamiento
+
+Los precios de lanzamiento han mostrado una tendencia hacia la **polarización**: mientras el precio mediano se mantiene estable, la varianza aumenta año a año. El 2024 concentra la mayor cantidad de modelos con dispersión notable entre gama baja y alta, reflejando una industria que sirve simultáneamente a mercados emergentes y a usuarios premium.
+
+```{r precio_anio}
+df_year <- df[df$Year >= 2019, ]
+df_year$Year_fac <- factor(df_year$Year)
+
+p5 <- ggplot(df_year, aes(x = Year_fac, y = Price_USD, fill = Year_fac)) +
+  geom_violin(alpha = 0.6, trim = TRUE) +
+  geom_boxplot(width = 0.1, fill = "white", alpha = 0.8) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Distribución de Precios por Año de Lanzamiento",
+       x = "Año", y = "Precio (USD)", fill = "Año") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+
+ggplotly(p5)
+```
+
+---
+
+# Análisis Multidimensional
+
+## Precio, Batería, Pantalla, RAM y Marca (Top 6)
+
+Esta visualización integra **cinco variables simultáneamente** para las seis marcas más representadas. El eje X muestra la batería, el eje Y el precio, el tamaño del punto refleja el tamaño de pantalla y el color indica la marca. La RAM aparece al hacer hover sobre cada punto.
+
+Se observa que **Apple** se posiciona en precios altos con baterías relativamente pequeñas (apostando por optimización de software), mientras marcas como **Infinix y Realme** ofrecen baterías grandes a precios bajos. Samsung y Oppo cubren todo el espectro del mercado.
+
+```{r multi_dim}
+conteo_all <- sort(table(df$Brand), decreasing = TRUE)
+top6_names <- names(conteo_all)[1:6]
+df_multi <- df[df$Brand %in% top6_names & !is.na(df$Screen_in) & df$Screen_in > 0, ]
+
+p6 <- ggplot(df_multi,
+             aes(x = Battery_mAh, y = Price_USD,
+                 size = Screen_in, color = Brand,
+                 text = paste0("Marca: ", Brand,
+                               "\nModelo: ", Model.Name,
+                               "\nBatería: ", Battery_mAh, " mAh",
+                               "\nPrecio: $", Price_USD,
+                               "\nPantalla: ", Screen_in, " pulg.",
+                               "\nRAM: ", RAM_GB, " GB"))) +
+  geom_point(alpha = 0.65) +
+  scale_size_continuous(range = c(2, 8), name = "Pantalla (pulg.)") +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Precio vs. Batería por Marca (tamaño = pantalla)",
+       x = "Batería (mAh)", y = "Precio (USD)", color = "Marca") +
+  theme_minimal(base_size = 13)
+
+ggplotly(p6, tooltip = "text")
+```
+
+---
+
+# Gráfica de Facetas
+
+## Precio vs. Batería por Año (2020–2024)
+
+Las facetas permiten comparar la relación precio–batería en distintos años de forma directa. Se aprecia que en **2020 los modelos eran más uniformes**, mientras que en 2023 y 2024 la dispersión aumenta notablemente. También es visible cómo la tendencia de baterías grandes (>5,000 mAh) a bajo precio se vuelve más común en años recientes, impulsada por fabricantes asiáticos de gama media.
+
+```{r facetas}
+df_facet <- df[df$Year %in% 2020:2024, ]
+
+p7 <- ggplot(df_facet, aes(x = Battery_mAh, y = Price_USD)) +
+  geom_point(aes(color = Brand), alpha = 0.5, size = 1.5, show.legend = FALSE) +
+  geom_smooth(method = "lm", se = FALSE, color = "#333333", linewidth = 0.7) +
+  facet_wrap(~Year, ncol = 3) +
+  labs(title = "Precio vs. Capacidad de Batería por Año",
+       x = "Batería (mAh)", y = "Precio (USD)") +
+  theme_minimal(base_size = 11) +
+  theme(strip.background = element_rect(fill = "#E3F2FD"),
+        strip.text = element_text(face = "bold"))
+
+ggplotly(p7)
+```
+
+---
+
+# Imagen Compuesta
+
+## Panorama de Especificaciones: 4 Gráficas en una
+
+Este panel resume cuatro distribuciones clave del dataset. Juntas cuentan una historia coherente: el mercado está dominado por pantallas entre 6 y 7 pulgadas, RAM de 6–8 GB, baterías de 4,000–5,000 mAh y precios que en su mayoría no superan los $500 USD.
+
+```{r compuesta}
+p_a <- ggplot(df, aes(x = Screen_in)) +
+  geom_histogram(bins = 30, fill = "#7E57C2", color = "white", alpha = 0.85) +
+  labs(title = "Tamaño de Pantalla", x = "Pulgadas", y = "Modelos") +
+  theme_minimal(base_size = 11)
+
+p_b <- ggplot(df[df$RAM_GB <= 16, ], aes(x = factor(RAM_GB))) +
+  geom_bar(fill = "#26A69A", alpha = 0.85) +
+  labs(title = "RAM", x = "GB", y = "Modelos") +
+  theme_minimal(base_size = 11)
+
+p_c <- ggplot(df, aes(x = Battery_mAh)) +
+  geom_histogram(bins = 30, fill = "#EF5350", color = "white", alpha = 0.85) +
+  labs(title = "Capacidad de Batería", x = "mAh", y = "Modelos") +
+  theme_minimal(base_size = 11)
+
+p_d <- ggplot(df, aes(x = Price_USD)) +
+  geom_histogram(bins = 30, fill = "#FFA726", color = "white", alpha = 0.85) +
+  labs(title = "Precio de Lanzamiento", x = "USD", y = "Modelos") +
+  theme_minimal(base_size = 11)
+
+# Imagen compuesta usando subplot de plotly (sin gridExtra)
+subplot(
+  ggplotly(p_a),
+  ggplotly(p_b),
+  ggplotly(p_c),
+  ggplotly(p_d),
+  nrows = 2,
+  titleX = TRUE,
+  titleY = TRUE,
+  margin = 0.07
+) |> layout(title = list(text = "Panorama de Especificaciones del Mercado Móvil 2025"))
+```
+
+---
+
+# Conclusiones
+
+A partir del análisis exploratorio de este dataset de 930 smartphones se pueden extraer las siguientes conclusiones:
+
+1. **El mercado está dominado por marcas chinas en volumen**, especialmente Oppo, Honor, Vivo y Realme, aunque Apple y Samsung lideran en la gama alta.
+
+2. **La RAM es el predictor más claro del precio**: los teléfonos con 12 GB o más casi siempre superan los $500 USD, mientras que los de 4 GB raramente los alcanzan.
+
+3. **Las baterías se han estandarizado entre 4,000 y 5,000 mAh**. La tendencia a baterías grandes a precios bajos ha democratizado este beneficio para todos los segmentos.
+
+4. **Apple se diferencia** del resto con precios altos y baterías relativamente pequeñas, apostando por la eficiencia de software sobre la capacidad bruta.
+
+5. **El año 2024 muestra la mayor diversidad** de modelos y precios, reflejando un mercado maduro que sirve simultáneamente a consumidores de bajos y altos ingresos.
+
+6. **La relación precio–batería varía por año**: en años recientes la dispersión aumenta, indicando mayor segmentación del mercado.
+
+---
+
+*Análisis realizado con R · ggplot2 · plotly · Datos: Mobiles Dataset 2025*
